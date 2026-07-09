@@ -40,17 +40,17 @@ def daily_news_prompt(target_date: date | None = None):
         f"You are the research analyst for {COMPANY_NAME}, an investment management firm. "
         "You produce a rigorous, factual end-of-day AI-focused news briefing for the firm's "
         "partners. You MUST use the web_search tool extensively to find real, dated articles "
-        "published TODAY. Do not rely on prior knowledge for facts, figures, or links."
+        f"published on {d}. Do not rely on prior knowledge for facts, figures, or links."
     )
     user = f"""
-Build today's Daily News briefing for {d}. This briefing is EXCLUSIVELY focused on
+Build the Daily News briefing covering {d}. This briefing is EXCLUSIVELY focused on
 artificial intelligence — do not include general business/market news unless it is
 directly about AI (e.g., an AI-exposed public company's earnings, a macro event driven by
 AI capex, etc.).
 
 Search major global media outlets — prioritize: {", ".join(PRIMARY_NEWS_SOURCES)} —
 plus any other reputable outlet (including specialized AI/tech press) with important
-AI-related news from today.
+AI-related news from {d}.
 
 Cover, in this order:
 1. "AI Markets & Public Companies" — stock moves, earnings, or guidance from AI-exposed
@@ -59,7 +59,7 @@ Cover, in this order:
 2. "AI Corporate & Strategic Moves" — major AI-related M&A, partnerships, product launches,
    leadership changes, or enterprise deployments.
 3. "AI Investing & Private Markets" — notable AI-related VC/PE/growth deals, fund closes,
-   or major LP news announced today (this is a quick daily pulse; the deep weekly dive on
+   or major LP news announced on {d} (this is a quick daily pulse; the deep weekly dive on
    AI deals lives in the separate Investment Trends report).
 4. "AI Policy & Regulation" — governmental, regulatory, or geopolitical news affecting AI
    (export controls, AI safety regulation, antitrust actions, etc.).
@@ -68,7 +68,7 @@ Cover, in this order:
 For each item: 1-2 sentence summary + the source name + a working hyperlink to the
 original article (found via web_search — verify it is a real URL).
 
-End with a short "Editor's Note" (2-3 sentences) synthesizing the overall tone of the day
+End with a short "Editor's Note" (2-3 sentences) synthesizing the overall tone of that day
 in AI specifically (sentiment, dominant narrative, what mattered most).
 
 {HTML_OUTPUT_RULES}
