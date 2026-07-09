@@ -19,12 +19,15 @@ MODEL_NAME = os.environ.get("CLAUDE_MODEL", "claude-sonnet-4-6")
 MAX_TOKENS = 8000
 
 # ---------------------------------------------------------------------------
-# Email (Outlook / Office 365 corporate account)
+# Email (Gmail API + OAuth2)
 # ---------------------------------------------------------------------------
-SMTP_HOST = "smtp.office365.com"
-SMTP_PORT = 587
-SMTP_USER = os.environ["EMAIL_ADDRESS"]        # e.g. research@bridgecapital.com
-SMTP_PASSWORD = os.environ["EMAIL_PASSWORD"]   # App password (see README)
+# Used because Google Workspace admin has disabled App Passwords for this
+# account. Requires a Google Cloud project with the Gmail API enabled and an
+# OAuth2 Desktop-app client — see README section "Gmail API setup".
+GMAIL_SENDER = os.environ["EMAIL_ADDRESS"]              # e.g. alexandre.leao@bdcp.com.br
+GMAIL_CLIENT_ID = os.environ["GMAIL_CLIENT_ID"]
+GMAIL_CLIENT_SECRET = os.environ["GMAIL_CLIENT_SECRET"]
+GMAIL_REFRESH_TOKEN = os.environ["GMAIL_REFRESH_TOKEN"]
 FROM_NAME = "Bridge Capital Partners Research"
 
 # Comma-separated list of recipients, provided as a single secret, e.g.:
