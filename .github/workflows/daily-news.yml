@@ -1,33 +1,31 @@
-"""
-Runs the Daily News briefing: runs each morning and searches the PREVIOUS
-day's major AI news, then emails the summary to the configured recipient
-group.
+name: Daily News
 
-Run manually:  python daily_news.py
-Scheduled via: .github/workflows/daily-news.yml (runs ~7:00 AM Brasília time)
-"""
+on:
+  schedule:
+    # Runs at 10:00 UTC = 7:00 AM America/Sao_Paulo (BRT, UTC-3, no DST).
+    # Covers the PREVIOUS day's AI news (daily_news.py handles the date math).
+    - cron: "0 10 * * *"
+  workflow_dispatch: {}   # allows manual "Run workflow" trigger for testing
 
-from datetime import date, timedelta
-from prompts import daily_news_prompt
-from claude_client import generate_report
-from email_sender import send_report
+jobs:
+  send-daily-news:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
 
-def main():
-    # This runs in the morning, so the "day's news" we want is yesterday's —
-    # today's news hasn't happened yet.
-    target_day = date.today() - timedelta(days=1)
-    system, user = daily_news_prompt(target_day)
-    html_body = generate_report(system, user)
+      - name: Install dependencies
+        run: pip install -r requirements.txt
 
-    date_str = target_day.strftime("%B %d, %Y")
-    send_report(
-        subject=f"Bridge Capital Partners — Daily News — {date_str}",
-        subtitle="Daily News",
-        date_str=date_str,
-        html_body=html_body,
-    )
-
-
-if __name__ == "__main__":
-    main()
+      - name: Run daily news agent
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          EMAIL_ADDRESS: ${{ secrets.EMAIL_ADDRESS }}
+          GMAIL_CLIENT_ID: ${{ secrets.GMAIL_CLIENT_ID }}
+          GMAIL_CLIENT_SECRET: ${{ secrets.GMAIL_CLIENT_SECRET }}
+          GMAIL_REFRESH_TOKEN: ${{ secrets.GMAIL_REFRESH_TOKEN }}
+          EMAIL_RECIPIENTS: ${{ secrets.EMAIL_RECIPIENTS }}
+        run: python daily_news.py
