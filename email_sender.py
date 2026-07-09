@@ -1,25 +1,34 @@
 """
-Sends the generated HTML report via the corporate Outlook/Office 365 mailbox.
+Sends the generated HTML report via the Gmail API using OAuth2, instead of
+SMTP + username/password. This is required because Google Workspace admins
+can (and often do) disable "App Passwords" org-wide, which breaks the
+simpler SMTP approach.
 
-Setup required (see README.md for full steps):
-1. A dedicated mailbox, e.g. research@bridgecapital.com.
-2. An "app password" for that mailbox (requires SMTP AUTH enabled by IT and,
-   if MFA is on, an app password generated in the Microsoft account portal).
-3. Environment variables / GitHub secrets: EMAIL_ADDRESS, EMAIL_PASSWORD,
-   EMAIL_RECIPIENTS.
-
-If your organization disables basic SMTP AUTH entirely (common in stricter
-Microsoft 365 tenants), you'll need to switch this function to use the
-Microsoft Graph API with OAuth2 client-credentials instead — flag this to
-your IT team early, as it changes the auth flow (see README "Alternative:
-Microsoft Graph API").
+Setup required (see README.md section "Gmail API setup" for full steps):
+1. A Google Cloud project with the Gmail API enabled.
+2. An OAuth2 "Desktop app" client (client_id + client_secret).
+3. A one-time authorization run (generate_token.py) to obtain a refresh_token
+   for alexandre.leao@bdcp.com.br.
+4. Environment variables / GitHub secrets: GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET,
+   GMAIL_REFRESH_TOKEN, EMAIL_ADDRESS, EMAIL_RECIPIENTS.
 """
 
-import smtplib
+import base64
+import requests
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
-from config import SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, FROM_NAME, RECIPIENTS
+from config import (
+    GMAIL_SENDER,
+    GMAIL_CLIENT_ID,
+    GMAIL_CLIENT_SECRET,
+    GMAIL_REFRESH_TOKEN,
+    FROM_NAME,
+    RECIPIENTS,
+)
+
+TOKEN_URL = "https://oauth2.googleapis.com/token"
+SEND_URL = "https://gmail.googleapis.com/gmail/v1/users/me/messages/send"
 
 EMAIL_TEMPLATE = """
 <div style="font-family:Georgia,serif; max-width:700px; margin:0 auto; padding:24px; color:#1a1a1a;">
@@ -36,6 +45,22 @@ EMAIL_TEMPLATE = """
 """
 
 
+def _get_access_token() -> str:
+    """Exchange the long-lived refresh_token for a short-lived access_token."""
+    resp = requests.post(
+        TOKEN_URL,
+        data={
+            "client_id": GMAIL_CLIENT_ID,
+            "client_secret": GMAIL_CLIENT_SECRET,
+            "refresh_token": GMAIL_REFRESH_TOKEN,
+            "grant_type": "refresh_token",
+        },
+        timeout=30,
+    )
+    resp.raise_for_status()
+    return resp.json()["access_token"]
+
+
 def send_report(subject: str, subtitle: str, date_str: str, html_body: str,
                  recipients: list[str] | None = None) -> None:
     to_list = recipients or RECIPIENTS
@@ -46,13 +71,22 @@ def send_report(subject: str, subtitle: str, date_str: str, html_body: str,
 
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
-    msg["From"] = f"{FROM_NAME} <{SMTP_USER}>"
+    msg["From"] = f"{FROM_NAME} <{GMAIL_SENDER}>"
     msg["To"] = ", ".join(to_list)
     msg.attach(MIMEText(full_html, "html"))
 
-    with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
-        server.starttls()
-        server.login(SMTP_USER, SMTP_PASSWORD)
-        server.sendmail(SMTP_USER, to_list, msg.as_string())
+    raw = base64.urlsafe_b64encode(msg.as_bytes()).decode("utf-8")
+
+    access_token = _get_access_token()
+    resp = requests.post(
+        SEND_URL,
+        headers={
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json",
+        },
+        json={"raw": raw},
+        timeout=60,
+    )
+    resp.raise_for_status()
 
     print(f"Sent '{subject}' to {len(to_list)} recipient(s).")
