@@ -87,6 +87,11 @@ def send_report(subject: str, subtitle: str, date_str: str, html_body: str,
         json={"raw": raw},
         timeout=60,
     )
+    if not resp.ok:
+        # Print Google's detailed error body before raising, so the real
+        # cause (bad scope, API not enabled, org policy block, etc.) shows
+        # up in the GitHub Actions log instead of just "403 Forbidden".
+        print("Gmail API error response body:", resp.text)
     resp.raise_for_status()
 
     print(f"Sent '{subject}' to {len(to_list)} recipient(s).")
