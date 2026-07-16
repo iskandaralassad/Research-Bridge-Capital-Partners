@@ -15,7 +15,7 @@ ANTHROPIC_API_KEY = os.environ["ANTHROPIC_API_KEY"]
 # Check https://docs.claude.com/en/docs/about-claude/models for the current
 # recommended model ID before deploying to production — model names are
 # updated periodically.
-MODEL_NAME = os.environ.get("CLAUDE_MODEL", "claude-sonnet-4-6")
+MODEL_NAME = os.environ.get("CLAUDE_MODEL", "claude-sonnet-5")
 MAX_TOKENS = 8000
 
 # ---------------------------------------------------------------------------
