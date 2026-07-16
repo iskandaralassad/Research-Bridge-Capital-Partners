@@ -72,7 +72,10 @@ def send_report(subject: str, subtitle: str, date_str: str, html_body: str,
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
     msg["From"] = f"{FROM_NAME} <{GMAIL_SENDER}>"
-    msg["To"] = ", ".join(to_list)
+    # Send "To" the sender itself, and put the real recipient list in Bcc so
+    # recipients don't see each other's email addresses.
+    msg["To"] = GMAIL_SENDER
+    msg["Bcc"] = ", ".join(to_list)
     msg.attach(MIMEText(full_html, "html"))
 
     raw = base64.urlsafe_b64encode(msg.as_bytes()).decode("utf-8")
