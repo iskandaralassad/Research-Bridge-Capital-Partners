@@ -37,6 +37,11 @@ def generate_report(system_prompt: str, user_prompt: str, max_search_turns: int 
             "tools": [WEB_SEARCH_TOOL],
         }
         resp = requests.post(API_URL, headers=HEADERS, json=payload, timeout=180)
+        if not resp.ok:
+            # Print Anthropic's detailed error body before raising, so the
+            # real cause (invalid model, bad request, rate limit, etc.)
+            # shows up in the GitHub Actions log instead of just "400/429".
+            print("Anthropic API error response body:", resp.text)
         resp.raise_for_status()
         data = resp.json()
 
