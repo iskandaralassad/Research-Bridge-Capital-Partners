@@ -20,15 +20,16 @@ HEADERS = {
 WEB_SEARCH_TOOL = {"type": "web_search_20250305", "name": "web_search"}
 
 
-def generate_report(system_prompt: str, user_prompt: str, max_search_turns: int = 6) -> str:
+def generate_report(system_prompt: str, user_prompt: str, max_search_turns: int = 15) -> str:
     """
     Calls Claude with the web_search tool enabled, handles the multi-turn
     tool-use loop server-side (web_search is executed by Anthropic, not by us),
     and returns the concatenated text output.
     """
     messages = [{"role": "user", "content": user_prompt}]
+    data = None
 
-    for _ in range(max_search_turns):
+    for turn in range(max_search_turns):
         payload = {
             "model": MODEL_NAME,
             "max_tokens": MAX_TOKENS,
@@ -51,6 +52,7 @@ def generate_report(system_prompt: str, user_prompt: str, max_search_turns: int 
         # "tool_use" would only appear for client-executed tools; for
         # server tools we typically get "end_turn" once Claude is done).
         stop_reason = data.get("stop_reason")
+        print(f"Turn {turn + 1}: stop_reason={stop_reason}")
         messages.append({"role": "assistant", "content": data["content"]})
 
         if stop_reason != "tool_use":
@@ -59,8 +61,27 @@ def generate_report(system_prompt: str, user_prompt: str, max_search_turns: int 
         # Fallback safety: if a client-side tool_use block ever appears
         # (shouldn't happen with web_search), stop the loop gracefully.
         time.sleep(1)
+    else:
+        # The loop ran out of turns while Claude was still trying to search —
+        # the report is likely incomplete. Fail loudly instead of silently
+        # sending a blank/partial email.
+        print(
+            f"WARNING: hit max_search_turns={max_search_turns} without Claude "
+            "finishing. The report may be incomplete."
+        )
 
     text_parts = [
         block["text"] for block in data["content"] if block.get("type") == "text"
     ]
-    return "\n".join(text_parts).strip()
+    html_body = "\n".join(text_parts).strip()
+
+    if not html_body:
+        raise RuntimeError(
+            "generate_report() produced an EMPTY report body. This usually means "
+            "Claude ran out of search turns before writing the final summary, or "
+            "returned only tool-use content with no text block. Raising an error "
+            "here instead of sending a blank email — check the 'stop_reason' lines "
+            "above in this log to see how far it got."
+        )
+
+    return html_body
