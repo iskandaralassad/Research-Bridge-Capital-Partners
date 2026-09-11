@@ -88,7 +88,11 @@ def investment_trends_prompt(week_ending: date | None = None):
         "on news coverage, funding databases, and credible chatter (e.g., Crunchbase, "
         "PitchBook, TechCrunch 'is raising' reports, founder/investor social posts, forum "
         "discussions) — always distinguish clearly between closed and open rounds, and label "
-        "open-round information as unconfirmed/reported when it is not yet officially announced."
+        "open-round information as unconfirmed/reported when it is not yet officially announced. "
+        "You also track OPEN TENDER OFFERS — secondary liquidity events where existing "
+        "shareholders/employees of private AI companies can sell shares (company-run tenders, "
+        "or via platforms like Forge Global, EquityZen, Nasdaq Private Market) — distinct from "
+        "primary funding rounds."
     )
     user = f"""
 Build the weekly Investment Trends report for the week ending {d}, focused exclusively on
@@ -116,20 +120,30 @@ Structure the report as:
    If you cannot find credible open-round chatter this week, state that plainly instead of
    fabricating entries.
 
-3. "Thesis Consolidation" — 3-6 bullets synthesizing the dominant investment theses this
+3. "Companies with Open Tender Offers" — a table of AI companies with an active or recently
+   announced tender offer (a secondary sale process letting existing employees/early
+   shareholders sell shares — NOT a new primary funding round). Include company-organized
+   tenders and ones facilitated by secondary marketplaces (e.g., Forge Global, EquityZen,
+   Nasdaq Private Market, or a named investor/consortium buying secondary shares). Columns:
+   Company | Tender Price / Implied Valuation | Organizer/Platform | Window or Deadline (if
+   known) | Source. Use "NA" for any missing field. If none are found this week, state that
+   plainly rather than fabricating entries.
+
+4. "Thesis Consolidation" — 3-6 bullets synthesizing the dominant investment theses this
    week (e.g., vertical AI agents, AI infrastructure/compute, enterprise AI tooling,
    robotics, etc.) based on the deals observed.
 
-4. "Trend Shifts" — 2-4 bullets on what changed vs. recent weeks (e.g., valuations
+5. "Trend Shifts" — 2-4 bullets on what changed vs. recent weeks (e.g., valuations
    compressing/expanding in a subsector, new investor types entering, geographic shifts).
 
-5. "Notable Statistics" — 3-5 bullets with concrete numbers (e.g., total weekly AI funding
+6. "Notable Statistics" — 3-5 bullets with concrete numbers (e.g., total weekly AI funding
    volume, share going to US vs. rest of world, median round size by stage) — only include
    numbers you can source; cite the source inline.
 
-6. "Sources & Further Reading" — bullet list of links to: (a) the news articles for each
-   deal listed in either table, and (b) 2-4 broader pieces (fund reports, partner interviews,
-   market analyses) that illustrate where major funds say their investment theses are headed.
+7. "Sources & Further Reading" — bullet list of links to: (a) the news articles for each
+   deal/tender listed in any table above, and (b) 2-4 broader pieces (fund reports, partner
+   interviews, market analyses) that illustrate where major funds say their investment
+   theses are headed.
 
 {HTML_OUTPUT_RULES}
 """
