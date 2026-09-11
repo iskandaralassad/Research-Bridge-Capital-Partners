@@ -83,7 +83,12 @@ def investment_trends_prompt(week_ending: date | None = None):
         "trends report for the firm's partners, tracking capital deployed into AI companies. "
         "You MUST use web_search extensively to find real deals announced THIS WEEK. "
         "Never fabricate deal terms — if a figure (amount, valuation) is not disclosed "
-        "publicly, write NA rather than estimating."
+        "publicly, write NA rather than estimating. In addition to CLOSED deals, you also "
+        "surface companies reportedly CURRENTLY RAISING (open, not-yet-closed rounds) based "
+        "on news coverage, funding databases, and credible chatter (e.g., Crunchbase, "
+        "PitchBook, TechCrunch 'is raising' reports, founder/investor social posts, forum "
+        "discussions) — always distinguish clearly between closed and open rounds, and label "
+        "open-round information as unconfirmed/reported when it is not yet officially announced."
     )
     user = f"""
 Build the weekly Investment Trends report for the week ending {d}, focused exclusively on
@@ -98,20 +103,32 @@ Structure the report as:
    columns: Company | Investors/Funds | Amount Invested | Valuation | Stage. Use "NA" for
    any missing field. Include as many verified deals as you can find (aim for at least
    8-15 if available), covering a range of deal sizes and geographies, not just mega-rounds.
+   Only include CLOSED/announced rounds here.
 
-2. "Thesis Consolidation" — 3-6 bullets synthesizing the dominant investment theses this
+2. "Companies Currently Raising (Open Rounds)" — a separate table of AI companies reported
+   to be actively fundraising RIGHT NOW but not yet closed/confirmed, sourced from funding
+   databases (Crunchbase, PitchBook, CB Insights), tech press "is in talks to raise" /
+   "is raising" articles, and credible forum/social chatter (e.g., a16z or founder posts,
+   relevant subreddits, X/Twitter threads from reputable VCs or journalists). Columns:
+   Company | Reported Target Amount | Reported Valuation | Stage | Source/Where Reported.
+   Use "NA" for any missing field, and add a one-line note under the table making clear
+   this information is unconfirmed/reported and should be verified before acting on it.
+   If you cannot find credible open-round chatter this week, state that plainly instead of
+   fabricating entries.
+
+3. "Thesis Consolidation" — 3-6 bullets synthesizing the dominant investment theses this
    week (e.g., vertical AI agents, AI infrastructure/compute, enterprise AI tooling,
    robotics, etc.) based on the deals observed.
 
-3. "Trend Shifts" — 2-4 bullets on what changed vs. recent weeks (e.g., valuations
+4. "Trend Shifts" — 2-4 bullets on what changed vs. recent weeks (e.g., valuations
    compressing/expanding in a subsector, new investor types entering, geographic shifts).
 
-4. "Notable Statistics" — 3-5 bullets with concrete numbers (e.g., total weekly AI funding
+5. "Notable Statistics" — 3-5 bullets with concrete numbers (e.g., total weekly AI funding
    volume, share going to US vs. rest of world, median round size by stage) — only include
    numbers you can source; cite the source inline.
 
-5. "Sources & Further Reading" — bullet list of links to: (a) the news articles for each
-   deal listed in the table, and (b) 2-4 broader pieces (fund reports, partner interviews,
+6. "Sources & Further Reading" — bullet list of links to: (a) the news articles for each
+   deal listed in either table, and (b) 2-4 broader pieces (fund reports, partner interviews,
    market analyses) that illustrate where major funds say their investment theses are headed.
 
 {HTML_OUTPUT_RULES}
