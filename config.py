@@ -16,7 +16,7 @@ ANTHROPIC_API_KEY = os.environ["ANTHROPIC_API_KEY"]
 # recommended model ID before deploying to production — model names are
 # updated periodically.
 MODEL_NAME = os.environ.get("CLAUDE_MODEL", "claude-sonnet-5")
-MAX_TOKENS = 8000
+MAX_TOKENS = 16000
 
 # ---------------------------------------------------------------------------
 # Email (Gmail API + OAuth2)
