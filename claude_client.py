@@ -47,19 +47,21 @@ def generate_report(system_prompt: str, user_prompt: str, max_search_turns: int 
         data = resp.json()
 
         # web_search is a server-executed tool: Anthropic runs the search and
-        # returns the results inline. We just need to keep sending the
-        # conversation back if Claude wants to keep searching (stop_reason
-        # "tool_use" would only appear for client-executed tools; for
-        # server tools we typically get "end_turn" once Claude is done).
+        # returns the results inline. We need to keep sending the conversation
+        # back to let Claude continue in two cases: "tool_use" (Claude wants
+        # to call another tool) and "pause_turn" (Claude paused mid-turn,
+        # typically during a long-running server-side tool sequence like an
+        # extended web_search session, and needs another request to resume
+        # and finish). Only "end_turn" (and similar final reasons) mean
+        # Claude is actually done and has written its final text.
         stop_reason = data.get("stop_reason")
         print(f"Turn {turn + 1}: stop_reason={stop_reason}")
         messages.append({"role": "assistant", "content": data["content"]})
 
-        if stop_reason != "tool_use":
+        if stop_reason not in ("tool_use", "pause_turn"):
             break
 
-        # Fallback safety: if a client-side tool_use block ever appears
-        # (shouldn't happen with web_search), stop the loop gracefully.
+        # Fallback safety: brief pause between continuation requests.
         time.sleep(1)
     else:
         # The loop ran out of turns while Claude was still trying to search —
