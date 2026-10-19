@@ -17,7 +17,40 @@ HEADERS = {
     "content-type": "application/json",
 }
 
-WEB_SEARCH_TOOL = {"type": "web_search_20250305", "name": "web_search"}
+WEB_SEARCH_TOOL = {
+    "type": "web_search_20250305",
+    "name": "web_search",
+    "max_uses": 10,  # cap searches per request; pause_turn lets Claude continue after
+}
+
+# (connect timeout, read timeout) in seconds. A single response with many web
+# searches can take several minutes, so the read timeout must be generous.
+REQUEST_TIMEOUT = (15, 600)
+MAX_RETRIES = 3
+RETRYABLE_STATUS = {429, 500, 502, 503, 504, 529}
+
+
+def _post_with_retry(payload: dict) -> requests.Response:
+    """POST to the API, retrying on timeouts, connection errors and transient
+    HTTP errors (429/5xx/529) with exponential backoff."""
+    last_exc = None
+    for attempt in range(1, MAX_RETRIES + 1):
+        try:
+            resp = requests.post(API_URL, headers=HEADERS, json=payload, timeout=REQUEST_TIMEOUT)
+            if resp.status_code in RETRYABLE_STATUS and attempt < MAX_RETRIES:
+                wait = 20 * attempt
+                print(f"Transient API error {resp.status_code}; retry {attempt}/{MAX_RETRIES - 1} in {wait}s")
+                time.sleep(wait)
+                continue
+            return resp
+        except (requests.exceptions.ReadTimeout, requests.exceptions.ConnectionError) as exc:
+            last_exc = exc
+            if attempt == MAX_RETRIES:
+                break
+            wait = 20 * attempt
+            print(f"{type(exc).__name__}; retry {attempt}/{MAX_RETRIES - 1} in {wait}s")
+            time.sleep(wait)
+    raise last_exc
 
 
 def generate_report(system_prompt: str, user_prompt: str, max_search_turns: int = 15) -> str:
@@ -37,7 +70,7 @@ def generate_report(system_prompt: str, user_prompt: str, max_search_turns: int 
             "messages": messages,
             "tools": [WEB_SEARCH_TOOL],
         }
-        resp = requests.post(API_URL, headers=HEADERS, json=payload, timeout=180)
+        resp = _post_with_retry(payload)
         if not resp.ok:
             # Print Anthropic's detailed error body before raising, so the
             # real cause (invalid model, bad request, rate limit, etc.)
