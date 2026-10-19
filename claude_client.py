@@ -1,8 +1,8 @@
 """
 Thin wrapper around the Anthropic Messages API that:
 - enables the native web_search tool
-- runs the tool-use loop until Claude returns a final text response
-- concatenates all text blocks into a single HTML string
+- runs a research phase (tool-use loop) and then a final write phase
+- returns only the finished HTML report
 """
 
 import time
@@ -23,8 +23,7 @@ WEB_SEARCH_TOOL = {
     "max_uses": 10,  # cap searches per request; pause_turn lets Claude continue after
 }
 
-# (connect timeout, read timeout) in seconds. A single response with many web
-# searches can take several minutes, so the read timeout must be generous.
+# (connect timeout, read timeout) in seconds.
 REQUEST_TIMEOUT = (15, 600)
 MAX_RETRIES = 3
 RETRYABLE_STATUS = {429, 500, 502, 503, 504, 529}
@@ -32,7 +31,7 @@ RETRYABLE_STATUS = {429, 500, 502, 503, 504, 529}
 
 def _post_with_retry(payload: dict) -> requests.Response:
     """POST to the API, retrying on timeouts, connection errors and transient
-    HTTP errors (429/5xx/529) with exponential backoff."""
+    HTTP errors (429/5xx/529) with backoff."""
     last_exc = None
     for attempt in range(1, MAX_RETRIES + 1):
         try:
@@ -53,14 +52,18 @@ def _post_with_retry(payload: dict) -> requests.Response:
     raise last_exc
 
 
-def generate_report(system_prompt: str, user_prompt: str, max_search_turns: int = 15) -> str:
+def generate_report(system_prompt: str, user_prompt: str, max_search_turns: int = 10) -> str:
     """
-    Calls Claude with the web_search tool enabled, handles the multi-turn
-    tool-use loop server-side (web_search is executed by Anthropic, not by us),
-    and returns the concatenated text output.
+    Two phases:
+    1) RESEARCH: Claude searches the web (server-side web_search). We keep
+       resuming the conversation while stop_reason is tool_use / pause_turn.
+    2) WRITE: one final call with tools disabled (tool_choice=none) that asks
+       Claude to write ONLY the finished HTML report from the research above.
+    Only the text of that final call is returned, so no narration such as
+    "I'll research..." and no half-written tables end up in the email.
     """
     messages = [{"role": "user", "content": user_prompt}]
-    data = None
+    finished_naturally = False
 
     for turn in range(max_search_turns):
         payload = {
@@ -72,51 +75,65 @@ def generate_report(system_prompt: str, user_prompt: str, max_search_turns: int 
         }
         resp = _post_with_retry(payload)
         if not resp.ok:
-            # Print Anthropic's detailed error body before raising, so the
-            # real cause (invalid model, bad request, rate limit, etc.)
-            # shows up in the GitHub Actions log instead of just "400/429".
             print("Anthropic API error response body:", resp.text)
         resp.raise_for_status()
         data = resp.json()
 
-        # web_search is a server-executed tool: Anthropic runs the search and
-        # returns the results inline. We need to keep sending the conversation
-        # back to let Claude continue in two cases: "tool_use" (Claude wants
-        # to call another tool) and "pause_turn" (Claude paused mid-turn,
-        # typically during a long-running server-side tool sequence like an
-        # extended web_search session, and needs another request to resume
-        # and finish). Only "end_turn" (and similar final reasons) mean
-        # Claude is actually done and has written its final text.
         stop_reason = data.get("stop_reason")
-        print(f"Turn {turn + 1}: stop_reason={stop_reason}")
+        print(f"Research turn {turn + 1}: stop_reason={stop_reason}")
         messages.append({"role": "assistant", "content": data["content"]})
 
         if stop_reason not in ("tool_use", "pause_turn"):
+            finished_naturally = True
             break
-
-        # Fallback safety: brief pause between continuation requests.
         time.sleep(1)
-    else:
-        # The loop ran out of turns while Claude was still trying to search —
-        # the report is likely incomplete. Fail loudly instead of silently
-        # sending a blank/partial email.
-        print(
-            f"WARNING: hit max_search_turns={max_search_turns} without Claude "
-            "finishing. The report may be incomplete."
-        )
 
-    text_parts = [
-        block["text"] for block in data["content"] if block.get("type") == "text"
-    ]
-    html_body = "\n".join(text_parts).strip()
+    if not finished_naturally:
+        print(f"NOTE: research hit max_search_turns={max_search_turns}; moving to final write step.")
+
+    # Final write step: no more searching, just produce the report.
+    messages.append({
+        "role": "user",
+        "content": (
+            "Research is complete. Now write the FINAL report as specified, using only "
+            "what you found above. Output ONLY the HTML report body, starting directly "
+            "with the first section. No introduction, no commentary, no mention of "
+            "searching. Include ALL sections, in order, even if a section has no items "
+            "(say so plainly). Do not stop mid-table."
+        ),
+    })
+    payload = {
+        "model": MODEL_NAME,
+        "max_tokens": MAX_TOKENS,
+        "system": system_prompt,
+        "messages": messages,
+        "tools": [WEB_SEARCH_TOOL],
+        "tool_choice": {"type": "none"},
+    }
+    resp = _post_with_retry(payload)
+    if not resp.ok:
+        print("Anthropic API error response body (final step):", resp.text)
+    resp.raise_for_status()
+    data = resp.json()
+    print(f"Final write step: stop_reason={data.get('stop_reason')}")
+    if data.get("stop_reason") == "max_tokens":
+        print("WARNING: final report hit max_tokens and may be truncated.")
+
+    html_body = "\n".join(
+        b["text"] for b in data["content"] if b.get("type") == "text"
+    ).strip()
+
+    # Strip markdown code fences if the model wrapped the HTML.
+    if html_body.startswith("```"):
+        html_body = html_body.split("\n", 1)[-1]
+        if html_body.rstrip().endswith("```"):
+            html_body = html_body.rstrip()[:-3]
+        html_body = html_body.strip()
 
     if not html_body:
         raise RuntimeError(
-            "generate_report() produced an EMPTY report body. This usually means "
-            "Claude ran out of search turns before writing the final summary, or "
-            "returned only tool-use content with no text block. Raising an error "
-            "here instead of sending a blank email — check the 'stop_reason' lines "
-            "above in this log to see how far it got."
+            "generate_report() produced an EMPTY report body in the final write "
+            "step. Check the stop_reason lines above in this log."
         )
 
     return html_body
